@@ -1,15 +1,19 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
+using System.IO;
 using System.Net;
 using System.Text.RegularExpressions;
 using MasterLibrary.Threading;
 
 namespace Downloader
 {
-    public class LinkGrabber : AWorker<Uri>
+    public class LinkGrabber : AWorker<Uri>, INotifyPropertyChanged
     {
         public override event WorkDone<Uri> OnWorkerDone;
-        private WebClient client = new WebClient();
+        public event PropertyChangedEventHandler PropertyChanged;
+        bool working = false;
+        private ExtendedWebClient client = new ExtendedWebClient();
 
         public LinkGrabber()
         {
@@ -18,9 +22,16 @@ namespace Downloader
 
         protected override void StartWorker(Uri parameter)
         {
-            client = new WebClient();
+            client = new ExtendedWebClient();
             client.DownloadStringCompleted += Client_DownloadStringCompleted;
             client.DownloadStringAsync(parameter);
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs("Work"));
+            working = true;
+        }
+
+        public override string ToString()
+        {
+            return working?Work.ToString():"idle";
         }
 
         private void Client_DownloadStringCompleted(object sender, DownloadStringCompletedEventArgs e)
@@ -29,6 +40,8 @@ namespace Downloader
             if (e.Error != null)
             {
                 OnWorkerDone?.Invoke(this.Work, links);
+                working = false;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs("Work"));
                 return;
             }
 
@@ -45,21 +58,13 @@ namespace Downloader
                         {
                             links.Add(m.Groups[1].Value);
                         }
-                        else
-                        {
-
-                        }
-
                     }
-                    else
-                    {
-
-                    }
-
                 }
             }
 
             OnWorkerDone?.Invoke(this.Work, links);
+            working = false;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs("Work"));
         }
     }
 }

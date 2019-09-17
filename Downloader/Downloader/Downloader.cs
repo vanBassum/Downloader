@@ -42,16 +42,18 @@ namespace Downloader
                 var bytesChange = e.BytesReceived - BytesRecieved;
                 if (timeSpan.Seconds != 0)
                 {
-                    var bytesPerSecond = bytesChange / timeSpan.Seconds;
+                    var bytesPerSecond = bytesChange / timeSpan.TotalSeconds;
+                    lastUpdate = now;
+
+                    DownloadSpeed = bytesPerSecond;
+                    PropertyChanged(this, new PropertyChangedEventArgs("DownloadSpeed"));
 
                     BytesRecieved = e.BytesReceived;
-                    lastUpdate = now;
-                    DownloadSpeed = bytesPerSecond;
+                    PropertyChanged(this, new PropertyChangedEventArgs("BytesRecieved"));
                 }
             }
 
-            Progress = e.ProgressPercentage;
-            BytesRecieved = e.BytesReceived;
+            
 
             if (BytesTotal != e.TotalBytesToReceive)
             {
@@ -59,8 +61,7 @@ namespace Downloader
                 PropertyChanged(this, new PropertyChangedEventArgs("TotalBytesToReceive"));
             }
 
-            PropertyChanged(this, new PropertyChangedEventArgs("DownloadSpeed"));
-            PropertyChanged(this, new PropertyChangedEventArgs("BytesRecieved"));
+            Progress = e.ProgressPercentage;
             PropertyChanged(this, new PropertyChangedEventArgs("Progress"));
         }
 

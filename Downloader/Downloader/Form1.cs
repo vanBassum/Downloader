@@ -25,6 +25,7 @@ namespace Downloader
             listBox1.DataSource = DLPool._Workers;
             listBox2.DataSource = DLPool._Work;
             listBox3.DataSource = GrabberPool._Work;
+            listBox4.DataSource = GrabberPool._Workers;
             GrabberPool.OnWorkerDone += Pool_OnWorkerDone;
             treeView1.PathSeparator = "/";
         }
@@ -102,11 +103,30 @@ namespace Downloader
         {
             DLPool._Workers.Add(new Downloader());
         }
+
+        private void Button4_Click(object sender, EventArgs e)
+        {
+            GrabberPool._Workers.Add(new LinkGrabber());
+        }
     }
 
 
     public static class H
     {
+
+        private static readonly Dictionary<int, string> aFix = new Dictionary<int, string>()
+        {
+            { -4, "p"},
+            { -3, "n"},
+            { -2, "µ"},
+            { -1, "m"},
+            { 0, "" },
+            { 1, "k" },
+            { 2, "M" },
+            { 3, "G" },
+            { 4, "T" }
+        };
+
         private static readonly Dictionary<int, string> byteFix = new Dictionary<int, string>()
         {
             { 0, "B" },
@@ -119,7 +139,7 @@ namespace Downloader
 
         public static string ToHRBytes(double n)
         {
-            int div = 1000;
+            int div = 1024;
             double log = Math.Log(n, div);
             int mag = (int)(log < 0 ? Math.Ceiling(log) : Math.Floor(log));
             double rslt = n / Math.Pow(div, mag);
@@ -127,6 +147,19 @@ namespace Downloader
                 return 0 + byteFix[0];
             return rslt.ToString("0.000") + byteFix[mag];
         }
+
+        public static string ToHR(double n)
+        {
+            int div = 1000;
+            double log = Math.Log(n, div);
+            int mag = (int)(log < 0 ? Math.Ceiling(log) : Math.Floor(log));
+            double rslt = n / Math.Pow(div, mag);
+            if (!byteFix.ContainsKey(mag))
+                return "-" + byteFix[0];
+            return rslt.ToString("0.000") + byteFix[mag];
+        }
+
+
 
     }
 
