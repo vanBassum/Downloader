@@ -1,37 +1,38 @@
 ﻿using MasterLibrary.Bindable;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Data;
 using System.Drawing;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using System.Net;
-using System.Text.RegularExpressions;
 using System.IO;
+using MasterLibrary.Threading;
+using MasterLibrary.Extentions;
 
 namespace Downloader
 {
     public partial class Form1 : Form
     {
-        WorkerPool<LinkGrabber, Uri> pool;
+        WorkerPool<LinkGrabber, Uri> GrabberPool;
+        WorkerPool<Downloader, DLPar> DLPool;
         public Form1()
         {
             InitializeComponent();
-            pool = new WorkerPool<LinkGrabber, Uri>(1);
-            pool.OnWorkerDone += Pool_OnWorkerDone;
+            GrabberPool = new WorkerPool<LinkGrabber, Uri>(1);
+            DLPool = new WorkerPool<Downloader, DLPar>(1);
+            listBox1.DataSource = DLPool._Workers;
+            listBox2.DataSource = DLPool._Work;
+            listBox3.DataSource = GrabberPool._Work;
+            GrabberPool.OnWorkerDone += Pool_OnWorkerDone;
             treeView1.PathSeparator = "/";
-
-
         }
 
 
         private void Pool_OnWorkerDone(Uri work, object result)
         {
-            this.Text = pool.WorkCount.ToString();
+            this.Text = GrabberPool.WorkCount.ToString();
 
             List<string> links = result as List<string>;
 
@@ -42,7 +43,7 @@ namespace Downloader
                 int ind = treeView1.Nodes.FindIndex(n => fLink.StartsWith(n.Text));
 
                 if (fLink.EndsWith("/"))
-                    pool.AddWork(new Uri(fLink));
+                    GrabberPool.AddWork(new Uri(fLink));
 
                 if (ind != -1)
                     treeView1.Nodes[ind].AddPath(fLink.TrimEnd('/'));
@@ -53,6 +54,19 @@ namespace Downloader
         private void Button2_Click(object sender, EventArgs e)
         {
 
+            var checkedNodes = from n in treeView1.Nodes.Descendants()
+                               where n.Checked
+                               where n.Nodes.Count == 0
+                               where Path.GetExtension(n.Tag as string) != ""
+                               select n;
+
+            foreach (TreeNode n in checkedNodes)
+            {
+                DLPar par = new DLPar();
+                par.Source = new Uri(n.Tag as string);
+                par.Dest = (n.Tag as string).Replace(textBox1.Text, @"C:\a\" + par.Source.Host + "\\");
+                DLPool.AddWork(par);
+            }
 
         }
 
@@ -64,7 +78,7 @@ namespace Downloader
         private void Button1_Click(object sender, EventArgs e)
         {
             treeView1.Nodes.Add(textBox1.Text);
-            pool.AddWork(new Uri(textBox1.Text));
+            GrabberPool.AddWork(new Uri(textBox1.Text));
         }
 
         private void Form1_Load(object sender, EventArgs e)
@@ -84,103 +98,36 @@ namespace Downloader
                 item.Checked = checkedState;
         }
 
-    }
-    public class LinkGrabber : AWorker<Uri>
-    {
-        public override event WorkDone<Uri> OnWorkerDone;
-        private WebClient client = new WebClient();
-
-        public LinkGrabber()
+        private void Button3_Click(object sender, EventArgs e)
         {
-            
-        }
-
-        protected override void StartWorker(Uri parameter)
-        {
-            client = new WebClient();
-            client.DownloadStringCompleted += Client_DownloadStringCompleted;
-            client.DownloadStringAsync(parameter);
-        }
-
-        private void Client_DownloadStringCompleted(object sender, DownloadStringCompletedEventArgs e)
-        {
-            List<string> links = new List<string>();
-            if (e.Error != null)
-            {
-                OnWorkerDone?.Invoke(this.Work, links);
-                return;
-            }
-
-
-            MatchCollection mc = Regex.Matches(e.Result, "href *= *[\"'`](.+?)[\"'`]");
-           
-            foreach(Match m in mc)
-            {
-                if(m.Groups.Count > 0)
-                {
-                    if (!m.Groups[1].Value.StartsWith("?"))
-                    {
-                        if (!m.Groups[1].Value.StartsWith("/"))
-                        {
-                            links.Add(m.Groups[1].Value);
-                        }
-                        else
-                        {
-
-                        }
-
-                    }
-                    else
-                    {
-
-                    }
-
-                }
-            }
-
-            OnWorkerDone?.Invoke(this.Work, links);
+            DLPool._Workers.Add(new Downloader());
         }
     }
 
- 
-
-
-   
 
     public static class H
     {
-        public static void AddPath(this TreeNode tn, string path, char seperator = '/')
+        private static readonly Dictionary<int, string> byteFix = new Dictionary<int, string>()
         {
-            string relPath = path.Replace(tn.Text, "").TrimStart(seperator);
-            string[] split = relPath.Split(seperator);
+            { 0, "B" },
+            { 1, "kB" },
+            { 2, "MB" },
+            { 3, "GB" },
+            { 4, "TB" }
+        };
 
 
-            TreeNode curNode = tn;
-            for (int i = 0; i < split.Length; i++)
-            {
-
-                int ind = curNode.Nodes.FindIndex(n => n.Text == split[i]);
-                if (ind == -1)
-                {
-                    TreeNode newNode = new TreeNode(split[i]);
-                    curNode.Nodes.Add(newNode);
-                    curNode = newNode;
-                }
-                else
-                {
-                    curNode = curNode.Nodes[ind];
-                }
-            }
+        public static string ToHRBytes(double n)
+        {
+            int div = 1000;
+            double log = Math.Log(n, div);
+            int mag = (int)(log < 0 ? Math.Ceiling(log) : Math.Floor(log));
+            double rslt = n / Math.Pow(div, mag);
+            if (!byteFix.ContainsKey(mag))
+                return 0 + byteFix[0];
+            return rslt.ToString("0.000") + byteFix[mag];
         }
 
-        static public int FindIndex(this TreeNodeCollection col, Predicate<TreeNode> predicate)
-        {
-            for (int i = 0; i < col.Count; i++)
-            {
-                if (predicate(col[i]))
-                    return i;
-            }
-            return -1;
-        }
     }
+
 }
